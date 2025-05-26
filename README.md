@@ -1,1 +1,4 @@
 # fpvkwlxhfl
+streamlit
+pandas
+plotly
