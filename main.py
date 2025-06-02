@@ -1,28 +1,47 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
+import folium
+from streamlit_folium import st_folium
 
 # 페이지 설정
-st.set_page_config(page_title="Plotly 시각화", layout="wide")
+st.set_page_config(page_title="은평구 의류수거함 지도", layout="wide")
 
-st.title("📊 Google Drive CSV 데이터 Plotly 시각화")
+# 제목
+st.title("📦 은평구 의류 수거함 시각화 대시보드")
+st.markdown("서울특별시 은평구에 설치된 의류 수거함 위치를 시각화한 지도입니다.")
 
-# 1. CSV 데이터 불러오기
-csv_url = "https://drive.google.com/uc?export=download&id=1pwfON6doXyH5p7AOBJPfiofYlni0HVVY"
-df = pd.read_csv(csv_url)
+# 데이터 불러오기
+@st.cache_data
+def load_data():
+    df = pd.read_csv("data/은평구_의류수거함.csv", encoding='cp949')
+    df = df[['행정동', '설치장소', '위도', '경도']].dropna()
+    return df
 
-# 2. 날짜 컬럼 변환 (필요 시)
-if '날짜' in df.columns:
-    df['날짜'] = pd.to_datetime(df['날짜'])
+df = load_data()
 
-# 3. 데이터 미리보기
-st.subheader("데이터 미리보기")
-st.dataframe(df.head())
+# 행정동 필터
+dong_list = sorted(df['행정동'].unique())
+selected_dong = st.selectbox("🔍 행정동 선택", ["전체"] + dong_list)
 
-# 4. Plotly 시각화
-required_cols = {'날짜', '판매량', '카테고리'}
-if required_cols.issubset(df.columns):
-    fig = px.line(df, x='날짜', y='판매량', color='카테고리', title="카테고리별 일자별 판매량 추이")
-    st.plotly_chart(fig, use_container_width=True)
+# 필터 적용
+if selected_dong != "전체":
+    filtered_df = df[df['행정동'] == selected_dong]
 else:
-    st.warning(f"시각화를 위해 다음 컬럼이 필요합니다: {required_cols}")
+    filtered_df = df
+
+# 지도 시각화
+m = folium.Map(location=[filtered_df['위도'].mean(), filtered_df['경도'].mean()], zoom_start=14)
+for _, row in filtered_df.iterrows():
+    folium.Marker(
+        location=[row['위도'], row['경도']],
+        popup=row['설치장소'],
+        icon=folium.Icon(color="green", icon="tshirt", prefix="fa")
+    ).add_to(m)
+
+st.subheader("🗺️ 수거함 위치 지도")
+st_data = st_folium(m, width=800, height=500)
+
+# 통계 시각화
+st.subheader("📊 행정동별 수거함 개수")
+dong_counts = df['행정동'].value_counts().sort_values(ascending=False)
+st.bar_chart(dong_counts)
